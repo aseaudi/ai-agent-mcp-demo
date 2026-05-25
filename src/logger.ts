@@ -35,7 +35,7 @@ export const logger = {
   agent: (msg: string): void => {
     const lines = msg.split("\n").map((l) => `  ${l}`).join("\n");
     console.log(`\n${chalk.magenta("┌─ Claude ─────────────────────────────────────")}`);
-    console.log(chalk.white(lines));
+    console.log(chalk.black(lines));
     console.log(chalk.magenta("└──────────────────────────────────────────────\n"));
   },
 

@@ -92,10 +92,10 @@ export class BitbucketAgent {
 
     while (iteration < MAX_ITERATIONS) {
       iteration++;
-      logger.info(`\n── Iteration ${iteration} ──────────────────────────`);
+      // logger.info(`\n── Iteration ${iteration} ──────────────────────────`);
       // logger.info(`Sending System Prompt:\n${systemPrompt}`);
       // logger.info(`Sending tools: ${anthropicTools.map((t) => t.name + "\n" + t.description + "\n" + JSON.stringify(t.input_schema)).join("\n")}`);
-      logger.info(`Sending messages to model: ${JSON.stringify(messages)}`);
+      // logger.info(`Sending messages to model: ${JSON.stringify(messages)}`);
 
       const response = await this.anthropic.messages.create({
         model: this.config.model,
@@ -105,9 +105,9 @@ export class BitbucketAgent {
         messages,
       });
 
-      logger.info(`Model response received: ${JSON.stringify(response)}`);
+      // logger.info(`Model response received: ${JSON.stringify(response)}`);
 
-      logger.info(`Stop reason: ${response.stop_reason}`);
+      // logger.info(`Stop reason: ${response.stop_reason}`);
 
       const textBlocks = response.content.filter((b) => b.type === "text");
       if (textBlocks.length > 0) {
@@ -245,8 +245,9 @@ export class BitbucketAgent {
 1. Explore the repository structure to understand the codebase
 2. Identify all files that need to be created or modified
 3. Read each relevant file's current content
-4. Write back the updated file content
-5. Commit all changes with a descriptive message
+4. Create a feature branch with a relevant name, e.g. "add-login-screen"
+5. Write back the updated file content in the new branch (you can modify multiple files in the same branch)
+6. Commit all changes with a descriptive message
 
 ## Repository Context
 - repo_slug: ${this.config.repo}
