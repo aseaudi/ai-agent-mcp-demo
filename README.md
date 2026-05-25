@@ -1,6 +1,6 @@
 # Bitbucket MCP Agent
 
-A Node.js TypeScript application that connects to a **Bitbucket MCP server**, uses **Claude** as the AI brain, and implements natural-language change requests directly in your repository — finding relevant files, modifying them, and committing the result.
+A Node.js TypeScript application that connects to one or more **MCP servers**, uses **Claude** as the AI brain, and can handle natural-language requests against your Bitbucket repository and Atlassian tools such as Confluence.
 
 ---
 
@@ -62,6 +62,19 @@ Open `.env` and fill in:
 | `BITBUCKET_WORKSPACE` | Workspace slug (e.g. `mycompany`) |
 | `BITBUCKET_REPO` | Repository slug (e.g. `my-frontend-app`) |
 
+To also enable Confluence and Jira actions, fill in these optional variables:
+
+| Variable | Description |
+|---|---|
+| `ATLASSIAN_MCP_SERVER_COMMAND` | Usually `uvx` |
+| `ATLASSIAN_MCP_SERVER_ARGS` | Usually `mcp-atlassian` |
+| `JIRA_URL` | Jira base URL, e.g. `https://your-company.atlassian.net` |
+| `JIRA_USERNAME` | Jira account email |
+| `JIRA_API_TOKEN` | Jira API token |
+| `CONFLUENCE_URL` | Confluence base URL, e.g. `https://your-company.atlassian.net/wiki` |
+| `CONFLUENCE_USERNAME` | Confluence account email |
+| `CONFLUENCE_API_TOKEN` | Confluence API token |
+
 The agent uses the [`bitbucket-mcp`](https://www.npmjs.com/package/bitbucket-mcp) package, which is auto-installed via `npx -y bitbucket-mcp@latest` — no separate install needed.
 
 **Required Bitbucket app-password permissions:**
@@ -86,6 +99,10 @@ npm start
 npm start "add a login screen with username and password fields"
 npm start "add dark mode support with a toggle button in the nav bar"
 npm start "add a 404 not found page"
+npm start "create confluence page for the engineering weekly update"
+npm start "update confluence page 123456 with the latest release notes"
+npm start "delete confluence page 123456"
+npm start "create a jira ticket with issue type task title login page and description please add a login page"
 ```
 
 **Debug mode** (verbose MCP + agent output):
@@ -178,7 +195,7 @@ bitbucket-mcp-agent/
 
 All configuration lives in `.env`. See `.env.example` for the full list.
 
-### MCP Server
+### MCP Servers
 
 The agent uses [`bitbucket-mcp`](https://www.npmjs.com/package/bitbucket-mcp) by default, auto-installed via npx:
 
@@ -191,6 +208,21 @@ For **Bitbucket Server / Data Center**, also set:
 ```env
 BITBUCKET_URL=https://bitbucket.mycompany.com/rest/api/1.0
 ```
+
+To also connect an Atlassian MCP server for Confluence and Jira support:
+
+```env
+ATLASSIAN_MCP_SERVER_COMMAND=uvx
+ATLASSIAN_MCP_SERVER_ARGS=mcp-atlassian
+JIRA_URL=https://your-company.atlassian.net
+JIRA_USERNAME=your.email@company.com
+JIRA_API_TOKEN=your_api_token
+CONFLUENCE_URL=https://your-company.atlassian.net/wiki
+CONFLUENCE_USERNAME=your.email@company.com
+CONFLUENCE_API_TOKEN=your_api_token
+```
+
+When enabled, the agent exposes both Bitbucket and Atlassian tools to Claude in the same session. Tool names are prefixed with the MCP server alias to avoid collisions, for example `bitbucket__get_file_content` or `atlassian__create_confluence_page`.
 
 ### Model
 
@@ -215,6 +247,8 @@ TARGET_BRANCH=feature/ai-changes
 **Change agent behaviour** — edit `buildSystemPrompt()` in `src/agent.ts` to give Claude different instructions (e.g. always create a PR instead of committing directly).
 
 **Use a different MCP server** — point `MCP_SERVER_COMMAND` / `MCP_SERVER_ARGS` at any stdio MCP server; the agent is server-agnostic.
+
+**Add another MCP server** — configure the optional Atlassian variables in `.env`; the CLI will connect to both servers and merge their tool lists.
 
 ---
 

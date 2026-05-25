@@ -10,7 +10,7 @@
  */
 
 import { loadConfig } from "./config.js";
-import { BitbucketMCPClient } from "./mcp-client.js";
+import { MCPServerClient, MultiMCPClient } from "./mcp-client.js";
 import { BitbucketAgent } from "./agent.js";
 import { logger } from "./logger.js";
 import { select, input } from "@inquirer/prompts";
@@ -65,7 +65,7 @@ async function main(): Promise<void> {
   logger.separator();
 
   // 2. Connect to MCP server
-  logger.info("Connecting to Bitbucket MCP server…");
+  logger.info("Connecting to MCP server(s)…");
 
   // @nexus2520/bitbucket-mcp-server uses BITBUCKET_USERNAME + BITBUCKET_APP_PASSWORD
   const mcpEnv: Record<string, string> = {
@@ -75,19 +75,39 @@ async function main(): Promise<void> {
   if (config.bitbucketBaseUrl) {
     mcpEnv["BITBUCKET_BASE_URL"] = config.bitbucketBaseUrl;
   }
-  const mcpClient = new BitbucketMCPClient(
-    config.mcpServerCommand,
-    config.mcpServerArgs,
-    mcpEnv
-  );
+  const clients = [
+    new MCPServerClient(
+      "bitbucket",
+      config.mcpServerCommand,
+      config.mcpServerArgs,
+      mcpEnv,
+      config.mcpServerCwd || undefined
+    ),
+    new MCPServerClient(
+      "atlassian",
+      config.atlassianMcpCommand,
+      config.atlassianMcpArgs,
+      {
+        JIRA_URL: config.jiraUrl,
+        JIRA_USERNAME: config.jiraUsername,
+        JIRA_API_TOKEN: config.jiraApiToken,
+        CONFLUENCE_URL: config.confluenceUrl,
+        CONFLUENCE_USERNAME: config.confluenceUsername,
+        CONFLUENCE_API_TOKEN: config.confluenceApiToken,
+      },
+      undefined
+    ),
+  ];
+
+  const mcpClient = new MultiMCPClient(clients);
 
   try {
     await mcpClient.connect();
-    logger.success("Connected to MCP server.");
+    logger.success(`Connected to ${clients.length} MCP server(s).`);
   } catch (err) {
     logger.error(`Failed to connect to MCP server: ${(err as Error).message}`);
     logger.error(
-      "Make sure npx is available and the MCP server package can be installed."
+      "Make sure the configured MCP server command is available and any required package or Python module is installed."
     );
     process.exit(1);
   }
@@ -126,6 +146,18 @@ async function main(): Promise<void> {
           name: "Add dark-mode support",
           value: "add dark-mode support with a toggle button in the navigation bar",
         },
+        {
+          name: "Create a Confluence page",
+          value: "create a confluence page for the engineering team release notes",
+        },
+        {
+          name: "Update a Confluence page",
+          value: "update a confluence page with the latest project status",
+        },
+        {
+          name: "Delete a Confluence page",
+          value: "delete confluence page 123456",
+        },
         { name: "Type a custom query…", value: "__custom__" },
       ],
     });
@@ -140,7 +172,10 @@ async function main(): Promise<void> {
     }
   }
 
-  let userQuery2 = userQuery + "Workspace is " + config.bitbucketWorkspace + " and repo is " + config.bitbucketRepo;
+  let userQuery2 = userQuery;
+  if (mcpClient.tools.some((tool) => tool.serverName === "bitbucket")) {
+    userQuery2 += ` Workspace is ${config.bitbucketWorkspace} and repo is ${config.bitbucketRepo}.`;
+  }
   logger.separator();
   logger.info(`User query: "${userQuery}"`);
   logger.info(`User query 2: "${userQuery2}"`);

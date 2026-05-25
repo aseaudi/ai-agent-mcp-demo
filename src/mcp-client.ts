@@ -2,7 +2,7 @@
  * mcp-client.ts
  *
  * Thin wrapper around @modelcontextprotocol/sdk that:
- *  - Spawns the Bitbucket MCP server process via stdio transport
+ *  - Spawns one or more MCP server processes via stdio transport
  *  - Lists all available tools
  *  - Calls individual tools and returns their results
  */
@@ -15,25 +15,53 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 
 export interface MCPToolDefinition {
+  serverName: string;
+  actualName: string;
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
 }
 
-export class BitbucketMCPClient {
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function buildStdioCommand(
+  command: string,
+  args: string[],
+  cwd?: string
+): { command: string; args: string[] } {
+  if (!cwd) {
+    return { command, args };
+  }
+
+  const quoted = [command, ...args].map(shellQuote).join(" ");
+  return {
+    command: "/bin/sh",
+    args: ["-lc", `cd ${shellQuote(cwd)} && exec ${quoted}`],
+  };
+}
+
+export class MCPServerClient {
   private client: Client;
   private transport: StdioClientTransport;
   private connected = false;
   private _tools: MCPToolDefinition[] = [];
+  private serverName: string;
 
   constructor(
+    serverName: string,
     serverCommand: string,
     serverArgs: string[],
-    env: Record<string, string>
+    env: Record<string, string>,
+    serverCwd?: string
   ) {
+    this.serverName = serverName;
+    const stdio = buildStdioCommand(serverCommand, serverArgs, serverCwd);
+
     this.transport = new StdioClientTransport({
-      command: serverCommand,
-      args: serverArgs,
+      command: stdio.command,
+      args: stdio.args,
       env: {
         ...process.env as Record<string, string>,
         ...env,
@@ -67,8 +95,10 @@ export class BitbucketMCPClient {
     const response = await this.client.listTools();
 
     this._tools = response.tools.map((t: Tool) => ({
-      name: t.name,
-      description: t.description ?? "",
+      serverName: this.serverName,
+      actualName: t.name,
+      name: `${this.serverName}__${t.name}`,
+      description: `[${this.serverName}] ${t.description ?? ""}`.trim(),
       inputSchema: (t.inputSchema as Record<string, unknown>) ?? {},
     }));
 
@@ -89,7 +119,15 @@ export class BitbucketMCPClient {
     args: Record<string, unknown>
   ): Promise<CallToolResult> {
     this.assertConnected();
-    const result = await this.client.callTool({ name, arguments: args });
+    const tool = this._tools.find((candidate) => candidate.name === name);
+    if (!tool) {
+      throw new Error(`Tool not found on ${this.serverName} server: ${name}`);
+    }
+
+    const result = await this.client.callTool({
+      name: tool.actualName,
+      arguments: args,
+    });
     return result as CallToolResult;
   }
 
@@ -112,5 +150,38 @@ export class BitbucketMCPClient {
     if (!this.connected) {
       throw new Error("MCP client is not connected. Call connect() first.");
     }
+  }
+}
+
+export class MultiMCPClient {
+  constructor(private readonly clients: MCPServerClient[]) {}
+
+  async connect(): Promise<void> {
+    for (const client of this.clients) {
+      await client.connect();
+    }
+  }
+
+  async disconnect(): Promise<void> {
+    await Promise.all(this.clients.map((client) => client.disconnect()));
+  }
+
+  get tools(): MCPToolDefinition[] {
+    return this.clients.flatMap((client) => client.tools);
+  }
+
+  async callToolText(
+    name: string,
+    args: Record<string, unknown>
+  ): Promise<string> {
+    const client = this.clients.find((candidate) =>
+      candidate.tools.some((tool) => tool.name === name)
+    );
+
+    if (!client) {
+      throw new Error(`Tool is not available from any connected MCP server: ${name}`);
+    }
+
+    return client.callToolText(name, args);
   }
 }

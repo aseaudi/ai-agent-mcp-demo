@@ -9,7 +9,7 @@ import type {
   ToolUseBlock,
   ToolResultBlockParam,
 } from "@anthropic-ai/sdk/resources/messages.js";
-import { BitbucketMCPClient, type MCPToolDefinition } from "./mcp-client.js";
+import { MultiMCPClient, type MCPToolDefinition } from "./mcp-client.js";
 import { logger } from "./logger.js";
 
 const MAX_ITERATIONS = 30;
@@ -73,7 +73,7 @@ export class BitbucketAgent {
     this.anthropic = new Anthropic({ apiKey: config.anthropicApiKey });
   }
 
-  async run(userQuery: string, mcpClient: BitbucketMCPClient): Promise<AgentResult> {
+  async run(userQuery: string, mcpClient: MultiMCPClient): Promise<AgentResult> {
     logger.info("Running Bitbucket agent...");
     const tools = mcpClient.tools;
     const anthropicTools = this.mcpToolsToAnthropicTools(tools);
@@ -238,48 +238,57 @@ export class BitbucketAgent {
       .join("\n\n");
 
     const branch = this.config.targetBranch || "main";
+    const hasBitbucketTools = tools.some((tool) => tool.serverName === "bitbucket");
+    const hasAtlassianTools = tools.some((tool) => tool.serverName === "atlassian");
 
-    return `You are an expert software engineering agent with access to a Bitbucket repository via MCP tools.
-
-## Your Mission
-1. Explore the repository structure to understand the codebase
-2. Identify all files that need to be created or modified
-3. Read each relevant file's current content
-4. Create a feature branch with a relevant name, e.g. "add-login-screen"
-5. Write back the updated file content in the new branch (you can modify multiple files in the same branch)
-6. Commit all changes with a descriptive message
-
-## Repository Context
+    const bitbucketInstructions = hasBitbucketTools
+      ? `## Bitbucket Context
 - repo_slug: ${this.config.repo}
 - ref (branch): ${branch}
 - Commit author: ${this.config.gitAuthorName} <${this.config.gitAuthorEmail}>
 
-## CRITICAL — Exact Parameter Names
-You MUST use parameter names EXACTLY as shown in the Tool Reference below.
-The correct parameter names for this server are:
-- Use "repo_slug" (NOT workspace / repository / repo)
-- Use "ref"      (NOT branch / branch_name)
-- Use "file_path" for file operations (NOT path / filepath / filename)
-- Use "path"     for directory listing (list_directory_content)
+### Bitbucket Rules
+- Use \`bitbucket__*\` tools for repository and source-code tasks
+- repo_slug is always "${this.config.repo}"
+- ref is always "${branch}"
+- Read a file before modifying it
+- Update all affected files before committing
+- Commit message should be imperative mood: "Add login screen"
+- Summarise what you changed after committing`
+      : "";
+
+    const atlassianInstructions = hasAtlassianTools
+      ? `## Atlassian Rules
+- Use \`atlassian__*\` tools for Confluence or Jira tasks
+- For requests like "create confluence page", "update confluence page", or "delete confluence page", prefer the Atlassian tools directly
+- If a Confluence tool requires information the user did not provide, ask only for the missing fields`
+      : "";
+
+    return `You are an expert agent with access to multiple MCP servers.
+
+## Your Mission
+1. Choose tools that match the user's request
+2. For repository changes, inspect relevant files before editing and commit the result
+3. For Confluence or Jira requests, use the Atlassian tools directly to complete the task
+
+## Tool Naming
+- Every tool name is prefixed with its MCP server alias in the form \`<server>__<tool>\`
+- Use the exact tool names shown in the Tool Reference below
 
 ## Tool Reference
 ${toolDocs}
 
-## Rules
-- repo_slug is always "${this.config.repo}"
-- ref is always "${branch}"
-- Read a file before modifying it
-- Update ALL affected files before committing
-- Commit message should be imperative mood: "Add login screen"
-- Summarise what you did after committing`;
+${bitbucketInstructions}
+
+${atlassianInstructions}`.trim();
   }
 
   private buildUserMessage(query: string): string {
-    return `Please implement the following change in the repository:
+    return `Please fulfill the following request using the available MCP tools:
 
 > ${query}
 
-Start by listing the root directory, then explore relevant subdirectories, read the files you need to modify, make the changes, and commit.`;
+If this is a repository change, inspect the relevant files before editing them. If this is a Confluence or Jira request, use the Atlassian tools directly.`;
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
