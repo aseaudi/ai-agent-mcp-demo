@@ -267,4 +267,4 @@ TARGET_BRANCH=feature/ai-changes
 
 ## License
 
-MIT
+MIT. See `LICENSE`.
