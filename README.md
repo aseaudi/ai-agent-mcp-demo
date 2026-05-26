@@ -1,6 +1,6 @@
 # Bitbucket MCP Agent
 
-A Node.js TypeScript application that connects to one or more **MCP servers**, uses **Claude** as the AI brain, and can handle natural-language requests against your Bitbucket repository and Atlassian tools such as Confluence.
+A Node.js TypeScript application that connects to one or more **MCP servers**, uses **Claude** as the AI brain, and can handle natural-language requests against your Bitbucket repository plus Atlassian tools, including creating and updating Jira tickets and Confluence pages.
 
 ---
 
@@ -62,7 +62,7 @@ Open `.env` and fill in:
 | `BITBUCKET_WORKSPACE` | Workspace slug (e.g. `mycompany`) |
 | `BITBUCKET_REPO` | Repository slug (e.g. `my-frontend-app`) |
 
-To also enable Confluence and Jira actions, fill in these optional variables:
+To also enable Jira ticket and Confluence page create/update actions, fill in these optional variables:
 
 | Variable | Description |
 |---|---|
@@ -103,6 +103,8 @@ npm start "create confluence page for the engineering weekly update"
 npm start "update confluence page 123456 with the latest release notes"
 npm start "delete confluence page 123456"
 npm start "create a jira ticket with issue type task title login page and description please add a login page"
+npm start "update jira ticket PROJ-123 to set the description to include the latest QA notes"
+npm start "create a confluence page in the SCRUM space titled Project Overview and add a high level overview about the project features, roadmap, and its software architecture"
 ```
 
 **Debug mode** (verbose MCP + agent output):
@@ -209,7 +211,7 @@ For **Bitbucket Server / Data Center**, also set:
 BITBUCKET_URL=https://bitbucket.mycompany.com/rest/api/1.0
 ```
 
-To also connect an Atlassian MCP server for Confluence and Jira support:
+To also connect an Atlassian MCP server for Jira ticket and Confluence page create/update support:
 
 ```env
 ATLASSIAN_MCP_SERVER_COMMAND=uvx
